@@ -1,0 +1,148 @@
+---
+title: "GA"
+author: "Sakana"
+date: "11/3/2018"
+output: html_document
+---
+
+
+Ref: Generalized Simulated Annealing for Global Optimization: The GenSA Package
+An Application to Non-Convex Optimization in Finance and Physics
+by Yang Xiang, Sylvain Gubian, Brian Suomela and Julia Hoeng
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Load Libraries
+
+```{r}
+library(GenSA)
+library(ggplot2)
+library(GA)
+library(knitr)
+library(kableExtra)
+```
+
+### SOLVING USING GENETIC ALGORITHM
+
+
+
+#### PORTFOLIO OPTIMIZATION USING GA
+
+```{r}
+library("quantmod")
+### defining tickers
+tickers <- c("KO", "MS", "HPQ", "TM", "PEP")
+getSymbols(tickers, from = "2000-12-01", to = "2018-11-02")
+P <- NULL
+for(ticker in tickers) {
+  
+###saving data of tickers in temp
+  
+ tmp <- Cl(to.monthly(eval(parse(text = ticker)))) 
+ P <- cbind(P, tmp)
+}
+colnames(P) <- tickers
+R <- diff(log(P))
+R <- R[-1,]
+mu <- colMeans(R)
+sigma <- cov(R)
+library("PerformanceAnalytics")
+pContribCVaR <- ES(weights = rep(0.2, 5), method = "gaussian", portfolio_method = "component", mu = mu, sigma = sigma)$pct_contrib_ES
+obj <- function(w) {
+ fn.call <<- fn.call + 1
+ if (sum(w) == 0) { w <- w + 1e-2 }
+ w <- w / sum(w)
+ CVaR <- ES(weights = w, method = "gaussian", portfolio_method = "component", mu = mu, sigma = sigma)
+ tmp1 <- CVaR$ES
+ tmp2 <- min(CVaR$pct_contrib_ES - 0.225, 0)
+ out <- tmp1 + 1e3 * tmp2
+ return(out)
+}
+```
+#### Using Rastrigin function  
+
+```{r}
+Rastrigin <- function(x1, x2)
+{
+  20 + x1^2 + x2^2 - 10*(cos(2*pi*x1) + cos(2*pi*x2))
+}
+x1 <- x2 <- seq(-5.12, 5.12, by = 0.1)
+f <- outer(x1, x2, Rastrigin)
+```
+
+
+### SOLVING FOR PERFORMANCE VALUES
+
+```{r}
+set.seed(1600)
+fn.call <<- 0
+fn.call.GenSA <- fn.call
+genpro <- ga(type = "real-valued",fitness=function(w)-Rastrigin(w[1],w[2]),lower=rep(0,5),upper=rep(1,5), popSize = 1,maxiter = 150)
+summary(genpro)
+plot(genpro)
+### calling the function
+fn.call.GenSA <- fn.call
+```
+
+### SOLVING USING SIMULATION ALGORITHM
+
+```{r}
+library("quantmod")
+tickers <- c("KO", "MS", "HPQ", "TM", "PEP")
+getSymbols(tickers, from = "2000-12-01", to = "2018-11-02")
+P <- NULL
+for(ticker in tickers) {
+ tmp <- Cl(to.monthly(eval(parse(text = ticker))))
+ P <- cbind(P, tmp)
+}
+colnames(P) <- tickers
+R <- diff(log(P))
+R <- R[-1,]
+mu <- colMeans(R)
+sigma <- cov(R)
+library("PerformanceAnalytics")
+pContribCVaR <- ES(weights = rep(0.2, 5), method = "gaussian", portfolio_method = "component", mu = mu, sigma = sigma)$pct_contrib_ES
+obj <- function(w) {
+ fn.call <<- fn.call + 1
+ if (sum(w) == 0) { w <- w + 1e-2 }
+ w <- w / sum(w)
+ CVaR <- ES(weights = w, method = "gaussian", portfolio_method = "component", mu = mu, sigma = sigma)
+ tmp1 <- CVaR$ES
+ tmp2 <- max(CVaR$pct_contrib_ES - 0.225, 0)
+ out <- tmp1 + 1e3 * tmp2
+ return(out)
+}
+```
+
+```{r}
+set.seed(1234)
+fn.call <<- 0
+out.GenSA <- GenSA(fn = obj, lower = rep(0, 5), upper = rep(1, 5), control = list(smooth = FALSE, max.call = 3000))
+out.GenSA[c("value","par","counts")]
+fn.call.GenSA <- fn.call
+out.GenSA$value
+out.GenSA$counts
+cat("GenSA call functions", fn.call.GenSA, "times.\n")
+wstar.GenSA <- out.GenSA$par
+wstar.GenSA <- wstar.GenSA / sum(wstar.GenSA)
+rbind(tickers, round(100 * wstar.GenSA, 2))
+100 * (sum(wstar.GenSA * mu) - mean(mu))
+wstar.GenSA
+### comparing the values of GA and SA, in TABLE
+TICKER_NAMES <- c('KO', 'MS', 'HPQ', 'TM', 'PEP')
+VALUES_GA<- c(0.2325183, 0.6032943, 0.4259968, 0.645123, 0.8461917)
+VALUES_SA<- c(0.26746011, 0.07625159, 0.11686592, 0.23892777, 0.30049461)
+COUNT_GA<- c(150)
+COUNT_SA<- c(3000)
+OPTIMAL_VALUE_GA<- c(27.28861)
+OPTIMAL_VALUE_SA<- c(0.07366332)
+```
+
+### Plotting Table
+
+```{r}
+data.frame(TICKER_NAMES,VALUES_GA,VALUES_SA)
+data.frame(COUNT_GA,COUNT_SA,OPTIMAL_VALUE_GA,OPTIMAL_VALUE_SA)
+```
