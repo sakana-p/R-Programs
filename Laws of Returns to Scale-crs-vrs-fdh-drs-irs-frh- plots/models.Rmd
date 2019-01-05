@@ -1,0 +1,109 @@
+---
+title: "models"
+author: "Sakana"
+date: "10/15/2018"
+output: html_document
+---
+
+### Getting INPUT & OUTPUT as MATRIX
+
+```{r}
+library(Benchmarking)
+x <- matrix(c(150,400,320,520,350,320,0.2,0.7,1.2,2.0,1.2,0.7),ncol = 2)
+colnames(x) <- c("Staff Hours","Supplies")
+y <- matrix(c(14000,14000,42000,28000,19000,14000,3500,21000,10500,42000,25000,15000),ncol = 2)
+colnames(y) <- c("reimbursed","private")
+y
+x
+```
+
+### CRS Model
+
+```{r}
+e <- dea(x,y,RTS = "crs")
+## Displaying Efficiency and Peer
+e
+peers(e)
+lambda(e)
+## Displaying CRS graph
+dea.plot(x,y,RTS = "crs")
+```
+
+### VRS Model
+
+```{r}
+e <- dea(x,y,RTS = "vrs")
+## Displaying Efficiency and Peer
+e
+peers(e)
+lambda(e)
+## Displaying VRS graph
+dea.plot(x,y,RTS = "vrs")
+```
+
+### FDH Model
+```{r}
+e <- dea(x,y,RTS = "fdh")
+## Displaying Efficiency and Peer
+e
+peers(e)
+lambda(e)
+## Displaying FDH graph
+dea.plot(x,y,RTS = "fdh")
+```
+
+### DRS Model
+
+```{r}
+e <- dea(x,y,RTS = "drs")
+## Displaying Efficiency and Peer
+e
+peers(e)
+lambda(e)
+## Displaying FDH graph
+dea.plot(x,y,RTS = "drs")
+```
+
+### IRS Model
+
+```{r}
+e <- dea(x,y,RTS = "irs")
+## Displaying Efficiency and Peer
+e
+peers(e)
+lambda(e)
+## Displaying IRS graph
+dea.plot(x,y,RTS = "irs")
+```
+
+### FRH Model
+
+```{r}
+e <- dea(x,y,RTS = "add")
+## Displaying Efficiency and Peer
+e
+peers(e)
+lambda(e)
+## Displaying FRH graph
+dea.plot(x,y,RTS = "add")
+```
+
+### Plotting the Results in Table
+
+
+```{r}
+crs<- c(1.0000, 1.0000 ,1.0000, 1.0000, 0.9775, 0.8675)
+vrs<- c(1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.8963)
+fdh<- c(1, 1, 1, 1, 1, 1)
+drs<- c(1.0000, 1.0000 ,1.0000, 1.0000, 0.9775, 0.8675)
+irs<- c(1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 0.8963)
+frh<- c(1, 1, 1, 1, 1, 1)
+facility<-c('facility 1','facility 2','facility 3','facility 4','facility 5', 'facility 6')
+```
+
+### FACILITIES AND THEIR RESPECTIVE EFFICIENCY FOR DIFFERENT FUNCTIONS
+
+```{r}
+results<-data.frame(facility,crs,vrs,fdh,drs,irs,frh)
+results
+```
