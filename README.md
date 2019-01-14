@@ -33,6 +33,7 @@ To install the stable version from CRAN, simply run the following from an R cons
 
 
 ### SUM OF SQUARES OF ERROR-GA_GenSA
+
 Here we find the sum of squares of errors using Genetic Algorithem and Generalized Simulated Annealing.
 We also use ggplot for plotting the output
 
