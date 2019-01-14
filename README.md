@@ -1,15 +1,15 @@
 
-### Basic interger programming
+## Basic interger programming
 
 Problem that we solve:
 
-## Installation
+# Installation
 
 To install the stable version from CRAN, simply run the following from an R console:
 
  install.packages("lpSolveAPI")
  
- ## Deployment
+ # Deployment
  
  Download all the ".lp" files in a single file.
  
