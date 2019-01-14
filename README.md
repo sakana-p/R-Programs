@@ -3,7 +3,7 @@
 
 Problem that we solve:
 
-# Installation
+### Installation
 
 To install the stable version from CRAN, simply run the following from an R console:
 
