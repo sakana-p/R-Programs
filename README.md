@@ -3,6 +3,15 @@
 
 Problem that we solve:
 
+max: 8 x1 + 5 x2;
+
+with constraints
+
+x1 + x2 <= 6;
+
+9 x1 + 5 x2 <= 45;
+
+
 ### Installation
 
 To install the stable version from CRAN, simply run the following from an R console:
