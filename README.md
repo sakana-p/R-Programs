@@ -95,3 +95,21 @@ copy and run "gensa_ga.Rmd" file in R studio.
 
 Resulting output will be in the for of table comparing the results od GA and GenSA.
 
+## wells_fargo_challaenge(Optmising_carbon_foot-print)
+
+Here we try to minimise the carbonfoot print of each individual by sugesting alternative sourse of energy which will give less carbon foot print.
+
+### Installation 
+
+install.package("lpSolveAPI")
+
+### Deployment
+
+Download all the .lP files along with the .RMD file in to a single folder and make it as working directory.
+
+Run Wells_fargo.RMD
+
+
+
+
+
