@@ -1,0 +1,115 @@
+---
+title: "Wells Fargo Project(doc)"
+author: "Sakana,Andy,Yuhan"
+date: "12/9/2018"
+output: html_document
+---
+
+
+```{r}
+library(lpSolveAPI)
+x <- read.lp("final1.lp")
+x
+solve(x)
+get.objective(x)
+get.variables(x)
+
+```
+
+
+```{r}
+library(lpSolveAPI)
+x <- read.lp("final 2.lp")
+x
+solve(x)
+get.objective(x)
+get.variables(x)
+
+```
+
+
+
+```{r}
+library(lpSolveAPI)
+x <- read.lp("final3.lp")
+x
+solve(x)
+get.objective(x)
+get.variables(x)
+```
+
+
+```{r}
+library(lpSolveAPI)
+x <- read.lp("final4.lp")
+x
+solve(x)
+get.objective(x)
+get.variables(x)
+```
+
+
+
+```{r}
+library(lpSolveAPI)
+x <- read.lp("final5.lp")
+x
+solve(x)
+get.objective(x)
+get.variables(x)
+```
+
+
+
+```{r}
+library(lpSolveAPI)
+x <- read.lp("final6.lp")
+x
+solve(x)
+get.objective(x)
+get.variables(x)
+```
+
+
+```{r}
+library(lpSolveAPI)
+x <- read.lp("final7.lp")
+x
+solve(x)
+get.objective(x)
+get.variables(x)
+```
+
+
+
+```{r}
+library(lpSolveAPI)
+x <- read.lp("final8.lp")
+x
+solve(x)
+get.objective(x)
+get.variables(x)
+```
+
+
+
+```{r}
+library(lpSolveAPI)
+x <- read.lp("final9.lp")
+x
+solve(x)
+get.objective(x)
+get.variables(x)
+```
+
+
+
+```{r}
+library(lpSolveAPI)
+x <- read.lp("final10.lp")
+x
+solve(x)
+get.objective(x)
+get.variables(x)
+```
+
