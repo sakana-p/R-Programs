@@ -1,0 +1,221 @@
+---
+title: "classification-machine learning"
+author: "Sakana"
+date: "May 3, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(NLP)
+library(tm)
+library(ggplot2)
+library(data.table)
+library(readxl)
+library(keras)
+library(caret)
+library(mltools)
+```
+
+##Loading the data
+```{r}
+## Read the data 
+my_data1 <- read_excel("Billed_Non_Billed.xlsx")
+
+##my_data1 <- read_excel("February_Test_Date_Corrected.xlsx") ## For test data
+```
+
+```{r}
+## Identify the categorical Variables and convert them to factors.
+
+cat_cols <- c("SR Owner (Q#)","SR Type","Cash Vendor & Consumable Contracts","Coverage Type","SR Coverage Hours..11","SR Device","Activity Trouble Code","SR State","Activity Type")
+
+my_data1[,cat_cols] <- lapply(my_data1[,cat_cols],as.factor)
+
+```
+
+```{r}
+head(my_data)
+```
+
+## Tokenizing
+
+```{r}
+maxlen <- 100
+max_words <- 10000
+## Convert the reviews into vector of tokens of most frequently used words.
+tokenizer1 <- text_tokenizer(num_words = max_words) %>% fit_text_tokenizer(my_data1$`Call Text`)
+
+## conver the tokenizer into into integer sequence
+call_text_sequences <-texts_to_sequences(tokenizer1, my_data1$`Call Text`)
+
+## convert the sequences into the fixed lengths
+call_text <- pad_sequences(call_text_sequences, maxlen = 100)
+call_text <- as.matrix(call_text)
+
+## Convert the billing_notes into vector of tokens of most frequently used words.
+tokenizer2 <- text_tokenizer(num_words = max_words) %>% fit_text_tokenizer(my_data1$`Billing Notes`)
+
+## conver the tokenizer into into integer sequence
+billing_notes_sequences <-texts_to_sequences(tokenizer2, my_data1$`Billing Notes`)
+
+## convert the sequences into the fixed lengths
+billing_notes <- pad_sequences(billing_notes_sequences, maxlen = 100)
+billing_notes <- as.matrix(billing_notes)
+
+## Convert the item description into vector of tokens of most frequently used words.
+tokenizer3 <- text_tokenizer(num_words = max_words) %>% fit_text_tokenizer(my_data1$`Item Desc`)
+
+## conver the tokenizer into into integer sequence
+item_desc_sequences <-texts_to_sequences(tokenizer3, my_data1$`Item Desc`)
+
+## convert the sequences into the fixed lengths
+item_desc <- pad_sequences(item_desc_sequences, maxlen = 100)
+item_desc <- as.matrix(item_desc)
+
+## one hot coding for categorical data
+
+categorical_data <- one_hot(as.data.table(my_data1[,cat_cols]))
+cat_num_data <- as.matrix(categorical_data)
+
+## convert the labels to numeric
+
+my_data1$`Invoiced (Y/N)` [my_data1$`Invoiced (Y/N)`== "N"] <- 0 
+my_data1$`Invoiced (Y/N)` [my_data1$`Invoiced (Y/N)`== "Y"] <- 1 
+sequences_labels <- as.integer(my_data1$`Invoiced (Y/N)`)
+
+labels <- as.array(sequences_labels)
+labels <- array_reshape(labels,c(nrow(labels),1))
+```
+
+```{r}
+## check unique words in call text
+word_index_call_text = tokenizer1$word_index
+length(word_index_call_text)
+
+##count Unique words in billing notes
+word_index_billing_notes = tokenizer2$word_index
+length(word_index_billing_notes)
+
+```
+
+
+```{r}
+## Splitting the data 
+
+set.seed(1234)
+Train_Index=sample(nrow(call_text),round(nrow(call_text)*.80))
+
+call_text_train= call_text[Train_Index,]
+call_text_val = call_text[-Train_Index,]
+
+billing_notes_train = billing_notes[Train_Index,]
+billing_notes_val = billing_notes[-Train_Index,]
+
+item_desc_train = item_desc[Train_Index,]
+item_desc_val = item_desc[-Train_Index,]
+
+cat_num_data_train = cat_num_data[Train_Index,]
+cat_num_data_val = cat_num_data[-Train_Index,]
+
+labels_train=labels[Train_Index,]
+labels_val=labels[-Train_Index,]
+
+labels_train <- as.matrix(labels_train)
+labels_val <- as.matrix(labels_val)
+
+```
+
+
+##Build Model
+
+```{r}
+call_text_input <- layer_input(shape = c(ncol(call_text)), dtype = 'int32', name = 'call_text_input')
+
+call_text_to_model <- call_text_input %>% 
+  layer_embedding(input_dim = max_words, output_dim = 4, 
+                  input_length = maxlen) %>%  layer_lstm(units = 32)
+
+billing_notes_input <- layer_input(shape = c(ncol(billing_notes)), dtype = 'int32', name = 'billing_notes_input')
+
+billing_notes_to_model <- billing_notes_input %>% 
+  layer_embedding(input_dim = max_words, output_dim = 4, 
+                  input_length = maxlen) %>%  layer_lstm(units = 32)
+
+item_desc_input <- layer_input(shape = c(ncol(item_desc)), dtype = 'int32', name = 'item_desc_input')
+
+item_desc_to_model <- item_desc_input %>% 
+  layer_embedding(input_dim = max_words, output_dim = 4, 
+                  input_length = maxlen) %>%  layer_lstm(units = 32)
+
+cat_num_input <- layer_input(shape = c(ncol(cat_num_data)), name = 'cat_num_input')
+
+
+main_output <- layer_concatenate(c(call_text_to_model,billing_notes_to_model,item_desc_to_model, cat_num_input)) %>%  
+  layer_dense(units = 128, activation = 'relu') %>% 
+  layer_dropout(0.3) %>%
+  layer_dense(units = 64, activation = 'relu') %>% 
+  layer_dropout(0.3) %>%
+  layer_dense(units = 64, activation = 'relu') %>% 
+  layer_dense(units = 1, activation = 'sigmoid', name = 'main_output')
+```
+
+```{r}
+model <- keras_model(
+  inputs = c(call_text_input,billing_notes_input,item_desc_input,cat_num_input), 
+  outputs = c(main_output )
+)
+```
+
+```{r}
+summary(model)
+```
+
+
+```{r}
+model %>% compile(
+  optimizer = "adam",
+  loss = list(main_output = "binary_crossentropy"),
+  metrics ="acc"
+)
+```
+
+##Training the Model
+
+```{r}
+history <- model %>% fit(
+  x = list(call_text_input = call_text_train,
+           billing_notes_input = billing_notes_train,
+           item_desc_input = item_desc_train,
+           cat_num_input= cat_num_data_train),
+  y = list(main_output = labels_train),
+  epochs = 10,
+  batch_size = 15,
+  validation_data = list(list(call_text_val,billing_notes_val,item_desc_val,cat_num_data_val),labels_val)
+  )
+```
+
+```{r}
+plot(history)
+```
+
+## Confusion Matrix Train and Validation.
+```{r}
+predicted <- model %>% predict(list(call_text_val,billing_notes_val,item_desc_val,cat_num_data_val))
+predicted <- ifelse(predicted >.20,1,0)
+actual <- labels_val
+table(predicted,actual)
+```
+
+## Predicting Test Data 
+
+```{r}
+predicted_class_testdata <- model %>% predict(list(call_text,billing_notes,item_desc,cat_num_data))
+predicted_class_testdata <- ifelse(predicted_class_testdata >.80,1,0)
+write.csv(predicted_class_testdata,"Test_prediction_Group5.csv")
+```
+
