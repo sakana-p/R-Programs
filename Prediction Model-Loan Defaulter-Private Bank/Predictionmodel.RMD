@@ -1,0 +1,306 @@
+---
+title: "Loan Default"
+author: "Sakana"
+output: html_document
+---
+
+```{r message=FALSE}
+library(readr)
+library(dplyr)
+library(caret)
+library(MASS)
+library(pROC)
+library(ggplot2)
+```
+
+
+### Importing Data
+
+We first start by importing the data and adding a binary column called default to show which individuals default and those that do not.
+```{r}
+default <- read.csv("train.csv")
+
+# We add a binary column to see whether the individual has defaulted or not
+default$default <- ifelse(default$loss == 0, 0, ifelse(default$loss != 0, 1, NA))
+```
+
+### Cleaning Data
+
+We then apply a function to impute the median value of each column for missing values. Any column that has zero variance or is a duplicate is removed.
+```{r}
+# A function to add the median of each column to missing values
+default <- data.frame(lapply(default,function(x) {
+    if(is.numeric(x)) ifelse(is.na(x),median(x,na.rm=T),x) else x}))
+
+# A function to remove the columns with 0 variance
+default <- default[ - as.numeric(which(apply(default, 2, var) == 0))]
+
+# This removes the duplicate "id" number "X"
+default <- default[2:753]
+```
+
+### Correlation Reduction
+
+Below we create a dataframe of the names of each column and its correlation to the default column.
+
+```{r}
+#Break the variables into x and y
+y <- default[752]
+x <- default[2:750]
+
+# We take the names of each column and place them into a dataframe
+independent <- names(x)
+correlation <- as.data.frame(independent)
+
+# A data frame of the correlation of each inpendent variable and default is placed into a dataframe
+corr <- cor(x,y)
+cor <- as.data.frame(corr)
+plot(corr)
+
+# The two columns are combined
+correlation["correlation"] <- cor
+```
+
+We filter these values from the "correlation" dataframe and take only a certain amount of the highly correlated values, the id column, and the binary default values. These values are put into the prediction.file.
+
+```{r}
+#Reduced variables to those with the most correlation
+correlation <- correlation %>% filter(correlation >= 0.05 | correlation <= -0.05)
+
+prediction.file <- default %>% dplyr::select(id, correlation$independent, default)
+dim(prediction.file)
+```
+
+### Creating Training and Test Sets
+
+Training and test sets are created for modeling purposes.
+
+```{r}
+smp_size <- floor(0.80 * nrow(prediction.file))
+
+## set the seed to make your partition reproducible
+set.seed(123)
+train_ind <- sample(seq_len(nrow(prediction.file)), size = smp_size)
+
+train <- prediction.file[train_ind, ]
+test <- prediction.file[-train_ind, ]
+```
+
+### Modeling Probability of Default 
+
+After reducing the variables with a correlation threshold, we ran a logistic regression and view the importance of each variable. We reduce the variables to only those with a coefficient greater than 2.
+
+```{r}
+# Fit the full model 
+full.model <- glm(default ~ ., family = binomial, data = train)
+var.imp <- varImp(full.model, scale = FALSE)
+
+var.imp["Variables"] <- rownames(var.imp)
+
+var.imp.reduced <- var.imp %>% filter(Overall > 2) 
+```
+
+The reduced variables are then plugged back into the logistic regression model and the results are used in a step regression model to further reduce the variables. Important Variables: f8, f13, f599, f41, f51, f54, f65, f66, f75, f82, f143, f144, f221, f222, f243, f251, f259, f269, f270, f290, f330, f380, f381, f382, f392, f397, f404, f499, f563, f596, f598, f633, f664, f774, f775, f776. 
+
+After the stepwise regression, variables f243 and f330 were removed.
+
+```{r}
+full.model.reduced <- glm(default ~ f8 + f13 + f41 + f51 + f54 + f65 + f66 + f75 + f82 + f143 + f144 + f221 + f222 + f243 + f251 + f259 + f269 + f270 + f290 + f330 + f380 + f381 + f382 + f392 + f397 + f404 + f499 + f563 + f596 + f598 + f599 + f633 + f664 + f774 + f775 + f776, family = binomial, data = train)
+
+# Stepwise regression model
+step.model <- stepAIC(full.model.reduced, direction = "both", trace = FALSE)
+```
+
+### Evaluating Results
+
+We now make predictions on the test data and see the model accuracy through the Roc Curve.
+
+```{r}
+p <- predict(step.model, test, type = "response")
+
+roc(test$default, p) 
+plot(roc(test$default, p), col='red', lwd=2)
+```
+
+Then we evaluate the amount of type 1 & 2 error with the confusion matrix.
+
+```{r}
+probability <- as.numeric(p > .10)
+
+Confusion_Matrix <- table(Predicted = probability, Actual = test$default)
+
+colnames(Confusion_Matrix) <- c("No", "Yes")
+rownames(Confusion_Matrix) <- c("No", "Yes")
+Confusion_Matrix
+```
+
+### Modeling the Loss Given Default
+
+Now that we have evaluated each individuals probability of default, we try to predict the loss the bank will incur given an individual defaults. So the first step is reducing the default data to only those that have defaulted.
+
+```{r}
+defaulted <- default %>% filter(default == 1)
+```
+
+Next we reduce the variables to those that we have deemed important in our variable reduction step.
+
+```{r}
+defaulted <- defaulted %>% dplyr::select(id, f8, f13, f41, f51, f54, f65, f66, f75, f82, f143, f144, f221, f222, f251, f259, f269, f270, f290, f380, f381, f382, f392, f397, f404, f499, f563, f596, f598, f599, f633, f664, f774, f775, f776, loss)
+```
+
+```{r}
+defaulted <- data.frame(lapply(defaulted,function(x) {
+    if(is.numeric(x)) ifelse(is.na(x),median(x,na.rm=T),x) else x}))
+```
+
+### Random Forest Model
+
+The first modeling technique we will try is Random Forest. Prior to running the model we can create a custom tuneGrid, which always us to adjust hyperparameters easily.
+
+```{r}
+tuneGrid <- data.frame(
+  .mtry = c(2, 3, 7),
+  .splitrule = "variance",
+  .min.node.size = 20
+)
+```
+
+Below is the actually random forest model set to 5 fold cross-validation.
+
+```{r results='hide'}
+rf.model <- train(
+  loss ~ .,
+  tuneGrid = tuneGrid,
+  data = defaulted, 
+  method = "ranger",
+  trControl = trainControl(
+    method = "cv", 
+    number = 5, 
+    verboseIter = TRUE
+  )
+)
+rf.model
+```
+
+
+### Scenario 1
+
+In this first scenario, we have $1.4 billion as a company to loan. This is enough to provide loans to all as the sum of the requested amount column is below this total. We will provide a list of 1's and 0's relating to whether we will provide that person a loan or not. First we will import the test set below.
+
+```{r}
+first.second.test <- read.csv("test_scenario1_2.csv")
+```
+
+Now we clean the data the same way we cleaned the training data by adding median values and removing 0 variance columns.
+
+```{r}
+first.second.test <- data.frame(lapply(first.second.test,function(x) {
+    if(is.numeric(x)) ifelse(is.na(x),median(x,na.rm=T),x) else x}))
+
+# A function to remove the columns with 0 variance
+first.second.test <- first.second.test[ - as.numeric(which(apply(first.second.test, 2, var) == 0))]
+```
+
+Now using the models we created earlier for probability of default and loss given default, we run them on the test data and add the results to the data frame.
+
+```{r}
+scenario.1.2.pd <- predict(step.model, first.second.test, type = "response")
+first.second.test$PD <- scenario.1.2.pd
+
+scenario.1.2.lgd <- predict(rf.model, first.second.test)
+first.second.test$LGD <- (scenario.1.2.lgd/100)
+```
+
+The expected loss and expected gain are calculations are describe below:
+
+Expected Loss:
+PD * LGD * requested_loan + (1-PD)
+
+Expected Gain:
+(1 - PD) * 5 * .042 * requested_loan
+
+Expected Gain, Expected Loss, and Customer Default are created and added to the data frame.
+
+```{r}
+first.second.test <- first.second.test %>% mutate(expected_gain = (1 - PD) * 5 * .042 * requested_loan, expected_loss = PD * LGD * requested_loan + (1-PD), opportunity = expected_gain - expected_loss)
+```
+
+Below is the dataframe of decisions on whether to approve or not to be written to CSV.
+
+```{r}
+scen.1.results <- first.second.test %>%
+  group_by(id) %>%
+  summarise(approve = ifelse(opportunity > 1000, 1, 0))
+```
+
+
+### Scenario 2
+
+The second scenario is similar to the first but now we have a budget of $450 million. We will use the same file we imported above 'first.second.test.' 
+
+Below is the dataframe of decisions on whether to approve or not to be written to CSV.
+
+```{r}
+scen.2.int.results <- first.second.test %>%
+  group_by(id, requested_loan) %>%
+  summarise(approve = ifelse(opportunity > 13200, 1, 0))
+
+total.loan <- scen.2.int.results %>%
+  filter(approve == 1) 
+
+scen.2.results <- scen.2.int.results %>% dplyr::select(id, approve)
+
+sum(total.loan$requested_loan)
+```
+
+### Scenario 3
+
+The third and final scenario, we are faced with a similar situation as the two above, but now each customer has a proposed interest rate. This will affect our expect gain calculation as it will vary from person to person. We will have the $1.4 billion budget as in the first scenario.
+
+```{r}
+third.test <- read.csv("test_scenario3.csv")
+```
+
+
+```{r}
+third.test <- data.frame(lapply(third.test,function(x) {
+    if(is.numeric(x)) ifelse(is.na(x),median(x,na.rm=T),x) else x}))
+
+# A function to remove the columns with 0 variance
+third.test <- third.test[ - as.numeric(which(apply(third.test, 2, var) == 0))]
+```
+
+```{r}
+scenario.3.pd <- predict(step.model, third.test, type = "response")
+third.test$PD <- scenario.3.pd
+
+scenario.3.lgd <- predict(rf.model, third.test)
+third.test$LGD <- (scenario.3.lgd/100)
+```
+
+Expected Loss:
+PD * LGD * requested_loan + (1-PD) 
+
+Expected Gain:
+(1 - PD) * 5 * Proposed_Intrest_Rate * requested_loan
+
+```{r}
+third.test <- third.test %>% mutate(expected_gain = (1 - PD) * 5 * Proposed_Intrest_Rate * requested_loan, expected_loss = PD * LGD * requested_loan + (1-PD), opportunity = expected_gain - expected_loss, lg_ratio = expected_gain/expected_loss)
+```
+
+Below is the dataframe of decisions on whether to approve or not to be written to CSV.
+
+```{r}
+scen.3.results <- third.test %>%
+  group_by(id) %>%
+  summarise(approve = ifelse(opportunity > 1000, 1, 0))
+```
+
+Write the results to three seperate csv files.
+
+```{r}
+write.csv(scen.1.results, file = "G3_S1.csv")
+write.csv(scen.2.results, file = "G3_S2.csv")
+write.csv(scen.3.results, file = "G3_S3.csv")
+```
+
